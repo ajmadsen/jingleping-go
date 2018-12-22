@@ -62,25 +62,22 @@ func makeImageArray(g *gif.GIF) []image.Image {
 	canvas := image.NewRGBA(image.Rect(0, 0, g.Config.Width, g.Config.Height))
 
 	var frame *image.RGBA
-	var frames []image.Image
-	for idx, img := range g.Image {
-		frame = image.NewRGBA(canvas.Bounds())
+	frames := make([]image.Image, len(g.Image))
 
-		if len(frames) > 0 {
-			drawFrame(canvas, frame, img, g.Disposal[idx], img.Palette[g.BackgroundIndex], frames[len(frames)-1])
-		} else {
-			drawFrame(canvas, frame, img, g.Disposal[idx], img.Palette[g.BackgroundIndex], nil)
+	// Loop twice to ensure blanked pixels stabilize on all frames. This lets us
+	// get cleaner results on the board with a slower rate.
+	for l := 0; l < 2; l++ {
+		for idx, img := range g.Image {
+			frame = image.NewRGBA(canvas.Bounds())
+
+			prev := idx - 1
+			if prev < 0 {
+				prev = len(frames) - 1
+			}
+			drawFrame(canvas, frame, img, g.Disposal[idx], img.Palette[g.BackgroundIndex], frames[prev])
+
+			frames[idx] = frame
 		}
-
-		frames = append(frames, frame)
-	}
-
-	if len(frames) > 1 {
-		// redo first frame, so it looks good on loop
-		frame = image.NewRGBA(canvas.Bounds())
-		canvas = image.NewRGBA(frame.Bounds())
-		drawFrame(canvas, frame, g.Image[0], gif.DisposalNone, nil, frames[len(frames)-1])
-		frames[0] = frame
 	}
 
 	return frames
@@ -149,9 +146,9 @@ func (i maskNonTransparent) ColorModel() color.Model {
 // transparent pixel at the same location. It ignores black pixels since black
 // pixels are "invisible" on the lighted display board.
 func (i maskNonTransparent) At(x, y int) color.Color {
-	r, g, b, a := i.Image.At(x, y).RGBA()
+	_, _, _, a := i.Image.At(x, y).RGBA()
 	// transparent or black pixel
-	if a != 0 && r != 0 && g != 0 && b != 0 {
+	if a != 0 {
 		return color.Alpha{255}
 	}
 	return color.Alpha{0}

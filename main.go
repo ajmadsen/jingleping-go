@@ -57,16 +57,36 @@ func worker(ch <-chan *net.IPAddr) {
 // fill fills the pixel channel with the frame(s) of desired image. Each frame
 // has its own delay, which the filler uses to time consecutive frames. The
 // filler loops forever.
-func fill(ch chan<- *net.IPAddr, frames [][]*net.IPAddr, delay []time.Duration) {
+func fill(ch chan<- *net.IPAddr, frames [][]*net.IPAddr, delay []time.Duration, rate int) {
 	for {
+	Frame:
 		for fidx, frame := range frames {
 			// frame clock
 			ticker := time.NewTimer(delay[fidx])
 
-			for _, a := range frame {
-				ch <- a
+			for {
+				repeat := time.NewTimer(time.Second / time.Duration(rate))
+				for _, a := range frame {
+					select {
+					case <-ticker.C:
+						continue Frame
+					case ch <- a:
+					}
+				}
+				// check ticker only first so we don't queue another redraw
+				select {
+				case <-ticker.C:
+					continue Frame
+				default:
+				}
+
+				// then wait on both
+				select {
+				case <-ticker.C:
+					continue Frame
+				case <-repeat.C:
+				}
 			}
-			<-ticker.C
 		}
 	}
 }
@@ -146,7 +166,7 @@ func main() {
 	log.Printf("queue length: %d", qLen)
 
 	pixCh := make(chan *net.IPAddr, qLen)
-	go fill(pixCh, frames, delays)
+	go fill(pixCh, frames, delays, *rateFlag)
 
 	for i := 0; i < *workersFlag; i++ {
 		go worker(pixCh)
