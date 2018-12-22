@@ -2,7 +2,7 @@
 
 Ping images to the [IPv6 christmas tree](https://jinglepings.com). I wrote this application to draw a dabbing Pikachu and a dancing Sans to the video wall.
 
-![Screenshot of Video Board with Pikachu and Sans](doc/tree.jpg)
+![Screenshot of Video Board with Pikachu and Sans](static/tree.jpg)
 
 # Usage
 
