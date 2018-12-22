@@ -51,16 +51,17 @@ func worker(ch <-chan *net.IPAddr) {
 	}
 }
 
-func fill(ch chan<- *net.IPAddr, addr []*net.IPAddr, rate int) {
-	// pixel clock
-	sd := 1 * time.Second / time.Duration(rate)
-	ticker := time.NewTicker(sd)
-
+func fill(ch chan<- *net.IPAddr, frames [][]*net.IPAddr, delay []time.Duration) {
 	for {
-		for _, a := range addr {
-			ch <- a
+		for fidx, frame := range frames {
+			// frame clock
+			ticker := time.NewTimer(delay[fidx])
+
+			for _, a := range frame {
+				ch <- a
+			}
+			<-ticker.C
 		}
-		<-ticker.C
 	}
 }
 
@@ -90,21 +91,43 @@ func main() {
 		os.Exit(1)
 	}
 
-	f, err := os.Open(*imageFlag)
-	if err != nil {
-		log.Fatalf("could not open image: %s", err)
+	var delays []time.Duration
+	var frames [][]*net.IPAddr
+	var qLen int
+
+	{
+		var imgs []image.Image
+
+		{
+			f, err := os.Open(*imageFlag)
+			if err != nil {
+				log.Fatalf("could not open image: %s", err)
+			}
+			defer f.Close()
+
+			imgs, delays, err = decodeImage(f)
+			if err != nil {
+				log.Fatalf("could not decode image: %s", err)
+			}
+		}
+
+		for _, img := range imgs {
+			addrs := makeAddrs(img, *dstNetFlag, *xOffFlag, *yOffFlag)
+			if len(addrs) > qLen {
+				qLen = len(addrs)
+			}
+			frames = append(frames, addrs)
+		}
 	}
 
-	img, _, err := image.Decode(f)
-	if err != nil {
-		log.Fatalf("could not decode image: %s", err)
+	if delays == nil {
+		delays = []time.Duration{time.Second / time.Duration(*rateFlag)}
 	}
 
-	addrs := makeAddrs(img, *dstNetFlag, *xOffFlag, *yOffFlag)
-	log.Printf("num addrs: %d", len(addrs))
+	log.Printf("queue length: %d", qLen)
 
-	pixCh := make(chan *net.IPAddr, len(addrs))
-	go fill(pixCh, addrs, *rateFlag)
+	pixCh := make(chan *net.IPAddr, qLen)
+	go fill(pixCh, frames, delays)
 
 	for i := 0; i < *workersFlag; i++ {
 		go worker(pixCh)
