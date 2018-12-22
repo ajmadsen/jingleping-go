@@ -32,8 +32,11 @@ const (
 	maxY = 120
 )
 
+// filled on package initialization. Contains a simple ICMPv6 ECHO request.
 var pingPacket []byte
 
+// worker drains the incoming channel, sending ping packets to the incoming
+// addresses.
 func worker(ch <-chan *net.IPAddr) {
 	c, err := icmp.ListenPacket("ip6:ipv6-icmp", "::")
 	if err != nil {
@@ -51,6 +54,9 @@ func worker(ch <-chan *net.IPAddr) {
 	}
 }
 
+// fill fills the pixel channel with the frame(s) of desired image. Each frame
+// has its own delay, which the filler uses to time consecutive frames. The
+// filler loops forever.
 func fill(ch chan<- *net.IPAddr, frames [][]*net.IPAddr, delay []time.Duration) {
 	for {
 		for fidx, frame := range frames {
@@ -65,15 +71,20 @@ func fill(ch chan<- *net.IPAddr, frames [][]*net.IPAddr, delay []time.Duration) 
 	}
 }
 
+// makeAddrs takes an image or frame, along with the destination network of the
+// display board and desired offset for the image, and yields a list of
+// addresses to ping to draw the image to the board.
 func makeAddrs(img image.Image, dstNet string, xOff, yOff int) []*net.IPAddr {
 	var addrs []*net.IPAddr
 
 	bounds := img.Bounds()
 	for y := 0; y < bounds.Dy() && y+yOff < maxY; y++ {
 		for x := 0; x < bounds.Dx() && x+xOff < maxX; x++ {
-			r, g, b, a := img.At(x, y).RGBA()
+			r, g, b, a := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
 			if a > 0 {
 				addrs = append(addrs, &net.IPAddr{
+					// Each channel is 16-bit, just shift down for 8-bit needed
+					// for the display
 					IP: net.ParseIP(fmt.Sprintf("%s:%d:%d:%x:%x:%x", dstNet, x+xOff, y+yOff, r>>8, g>>8, b>>8)),
 				})
 			}
@@ -95,6 +106,9 @@ func main() {
 	var frames [][]*net.IPAddr
 	var qLen int
 
+	// Read the image frame(s), convert frames to addresses. Ensure everything
+	// image related is cleaned up ASAP so we don't hold on to pixels we don't
+	// need.
 	{
 		var imgs []image.Image
 
@@ -111,6 +125,9 @@ func main() {
 			}
 		}
 
+		bounds := imgs[0].Bounds()
+		log.Printf("image bounds: %d %d", bounds.Dx(), bounds.Dy())
+
 		for _, img := range imgs {
 			addrs := makeAddrs(img, *dstNetFlag, *xOffFlag, *yOffFlag)
 			if len(addrs) > qLen {
@@ -120,6 +137,8 @@ func main() {
 		}
 	}
 
+	// If delay isn't set at this point, we just have one image. Use the
+	// provided flag to determine how many times to draw the image per second.
 	if delays == nil {
 		delays = []time.Duration{time.Second / time.Duration(*rateFlag)}
 	}
@@ -133,6 +152,7 @@ func main() {
 		go worker(pixCh)
 	}
 
+	// wait for interruption
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt)
 	<-ch
@@ -147,7 +167,7 @@ func init() {
 		Type: ipv6.ICMPTypeEchoRequest,
 		Code: 0,
 		Body: &icmp.Echo{
-			ID:  0xDEAD,
+			ID:  0xFFFF,
 			Seq: 1,
 		},
 	}
