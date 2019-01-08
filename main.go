@@ -23,7 +23,7 @@ var (
 	imageFlag   = flag.String("image", "", "the image to ping to the tree")
 	xOffFlag    = flag.Int("x", 0, "the x offset to draw the image")
 	yOffFlag    = flag.Int("y", 0, "the y offset to draw the image")
-	rateFlag    = flag.Int("rate", 100, "how many times to draw the image per second")
+	rateFlag    = flag.Int("rate", 5, "how many times to draw the image per second")
 	workersFlag = flag.Int("workers", 1, "the number of workers to use")
 )
 
