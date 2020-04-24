@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	dstNetFlag  = flag.String("dst-net", "2001:4c08:2028", "the destination network of the ipv6 tree")
+	dstNetFlag  = flag.String("dst-net", "2a05:9b81:2021", "the destination network of the ipv6 tree")
 	imageFlag   = flag.String("image", "", "the image to ping to the tree")
 	xOffFlag    = flag.Int("x", 0, "the x offset to draw the image")
 	yOffFlag    = flag.Int("y", 0, "the y offset to draw the image")
@@ -28,8 +28,8 @@ var (
 )
 
 const (
-	maxX = 160
-	maxY = 120
+	maxX = 1920
+	maxY = 1080
 )
 
 // filled on package initialization. Contains a simple ICMPv6 ECHO request.
